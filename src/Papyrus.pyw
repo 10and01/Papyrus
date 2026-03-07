@@ -333,7 +333,7 @@ class PapyrusApp:
             messagebox.showinfo("完成", "所有数据已清空")
 
     def show_about(self):
-        messagebox.showinfo("关于 Papyrus", "Papyrus v1.0.1\n一款极简的卷轴式学习工具\n\n开发者：[ALPACA LI]\n© 2026 Papyrus")
+        messagebox.showinfo("关于 Papyrus", "Papyrus v1.1.0\n一款极简的卷轴式学习工具\n\n开发者：[ALPACA LI]\n© 2026 Papyrus")
 
     def update_status(self, count):
         self.status_var.set(f"待复习: {count} | 总卡片: {len(self.cards)}")
