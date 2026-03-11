@@ -1,6 +1,6 @@
 # Papyrus 更新日志
 
-## v1.2.2-beta (2026-03-11)
+## v1.2.1-beta+macOS.arm64 (2026-03-11)
 
 ### 🔧 构建与部署
 
@@ -12,7 +12,7 @@
 
 - **优化打包配置**
   - 改进 PyInstaller spec 文件，支持跨平台图标配置
-  - Windows 使用 .ico 图标，macOS 使用默认图标
+  - Windows 使用 .ico 图 标，macOS 使用默认图标
   - 自动化构建 Windows x86_64 和 macOS ARM64 版本
 
 - **完善自动发布流程**
