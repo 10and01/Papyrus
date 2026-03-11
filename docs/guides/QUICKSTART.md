@@ -1,4 +1,4 @@
-# Papyrus v1.2.0-beta 快速启动指南
+# Papyrus 快速启动指南
 
 ## 🚀 5分钟上手
 
