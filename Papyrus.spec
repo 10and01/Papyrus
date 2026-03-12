@@ -3,7 +3,7 @@ import sys
 
 
 a = Analysis(
-    ['src/Papyrus.pyw'],
+    ['src/Papyrus.py'],
     pathex=[],
     binaries=[],
     datas=[('assets', 'assets')],
