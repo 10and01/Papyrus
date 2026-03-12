@@ -19,22 +19,18 @@ class AISidebar:
         self.agent_mode = tk.BooleanVar(value=True)  # Agent模式开关
         
         # 创建侧边栏容器
-        self.sidebar = tk.Frame(parent, width=400, bg="#ffffff")
-        self.sidebar.pack(side="right", fill="y")
-        self.sidebar.pack_propagate(False)
-        
+        self.sidebar = tk.Frame(parent, bg="#ffffff")
+        self.sidebar.pack(side="right", fill="both", expand=True)
         self.create_widgets()
     
     def create_widgets(self):
         """创建所有组件"""
         # 1. 顶部标题栏
         self.create_header()
-        
-        # 2. 对话显示区
-        self.create_chat_area()
-        
-        # 3. 底部输入区
+        # 2. 底部输入区（先pack，确保占位）
         self.create_input_area()
+        # 3. 对话显示区（填充剩余空间）
+        self.create_chat_area()
     
     def create_header(self):
         """创建顶部栏"""
@@ -127,61 +123,62 @@ class AISidebar:
     
     def create_input_area(self):
         """创建输入区"""
-        bottom_panel = tk.Frame(self.sidebar, bg="#f8f8f8", height=100)
+        self._placeholder = "Enter 发送 · Shift+Enter 换行"
+        self._placeholder_active = True
+
+        bottom_panel = tk.Frame(self.sidebar, bg="#f8f8f8")
         bottom_panel.pack(side="bottom", fill="x")
-        bottom_panel.pack_propagate(False)
 
         tk.Frame(bottom_panel, bg="#e0e0e0", height=1).pack(side="top", fill="x")
 
-        toolbar = tk.Frame(bottom_panel, bg="#f8f8f8")
-        toolbar.pack(side="top", fill="x", padx=15, pady=(4, 3))
+        # 第一行：模式选择
+        mode_row = tk.Frame(bottom_panel, bg="#f8f8f8")
+        mode_row.pack(side="top", fill="x", padx=15, pady=(3, 0))
 
-        mode_frame = tk.Frame(toolbar, bg="#f8f8f8")
-        mode_frame.pack(side="left")
-
-        tk.Label(mode_frame,
+        tk.Label(mode_row,
                 text="模式",
                 font=("微软雅黑", 9),
                 bg="#f8f8f8", fg="#666666").pack(side="left", padx=(0, 8))
 
-        self.agent_btn = tk.Button(mode_frame,
+        self.agent_btn = tk.Label(mode_row,
                                    text="Agent",
-                                   command=lambda: self.set_mode(True),
                                    bg="#1976d2",
                                    fg="#ffffff",
                                    font=("微软雅黑", 9),
-                                   relief="flat",
                                    padx=10,
-                                   pady=3)
+                                   pady=2,
+                                   cursor="hand2")
         self.agent_btn.pack(side="left", padx=(0, 5))
+        self.agent_btn.bind("<Button-1>", lambda e: self.set_mode(True))
 
-        self.chat_btn = tk.Button(mode_frame,
+        self.chat_btn = tk.Label(mode_row,
                                  text="Chat",
-                                 command=lambda: self.set_mode(False),
                                  bg="#e0e0e0",
                                  fg="#666666",
                                  font=("微软雅黑", 9),
-                                 relief="flat",
                                  padx=10,
-                                 pady=3)
+                                 pady=2,
+                                 cursor="hand2")
         self.chat_btn.pack(side="left")
+        self.chat_btn.bind("<Button-1>", lambda e: self.set_mode(False))
 
-        model_frame = tk.Frame(toolbar, bg="#f8f8f8")
-        model_frame.pack(side="right")
+        # 第二行：模型选择
+        model_row = tk.Frame(bottom_panel, bg="#f8f8f8")
+        model_row.pack(side="top", fill="x", padx=15, pady=(1, 1))
 
         provider = self.ai_manager.config.config["current_provider"]
         models = self.ai_manager.config.config["providers"][provider]["models"]
         current_model = self.ai_manager.config.config["current_model"]
-        
-        tk.Label(model_frame,
+
+        tk.Label(model_row,
                 text="模型",
                 font=("微软雅黑", 9),
                 bg="#f8f8f8", fg="#666666").pack(side="left", padx=(0, 6))
 
         self.model_var = tk.StringVar(value=current_model)
-        self.model_menu = tk.OptionMenu(model_frame, self.model_var, *models, command=self.on_model_change)
+        self.model_menu = tk.OptionMenu(model_row, self.model_var, *models, command=self.on_model_change)
         self.model_menu.config(bg="#ffffff", fg="#666666", font=("微软雅黑", 9),
-                              relief="flat", highlightthickness=0, padx=8, pady=2)
+                              relief="flat", highlightthickness=0, padx=6, pady=1)
         self.model_menu.pack(side="left")
 
         input_border_container = tk.Frame(bottom_panel, bg="#f8f8f8")
@@ -197,21 +194,33 @@ class AISidebar:
                                  height=1,
                                  font=("微软雅黑", 10),
                                  bg="#ffffff",
-                                 fg="#333333",
+                                 fg="#999999",
                                  relief="flat",
                                  bd=0,
                                  padx=10,
-                                 pady=8,
+                                 pady=5,
                                  wrap="none")
         self.chat_input.pack(fill="both", expand=True)
+        self.chat_input.insert("1.0", self._placeholder)
+        self.chat_input.bind("<FocusIn>", self._on_focus_in)
+        self.chat_input.bind("<FocusOut>", self._on_focus_out)
         self.chat_input.bind("<Return>", self.on_enter)
         self.chat_input.bind("<Shift-Return>", lambda e: None)
-
-        tk.Label(bottom_panel,
-                text="Enter 发送 · Shift+Enter 换行",
-                font=("微软雅黑", 8),
-                bg="#f8f8f8", fg="#999999").pack(side="top", anchor="w", padx=15, pady=3)
     
+    def _on_focus_in(self, event):
+        """输入框获得焦点时移除占位符"""
+        if self._placeholder_active:
+            self.chat_input.delete("1.0", "end")
+            self.chat_input.config(fg="#333333")
+            self._placeholder_active = False
+
+    def _on_focus_out(self, event):
+        """输入框失去焦点时恢复占位符"""
+        if not self.chat_input.get("1.0", "end").strip():
+            self.chat_input.insert("1.0", self._placeholder)
+            self.chat_input.config(fg="#999999")
+            self._placeholder_active = True
+
     def set_mode(self, is_agent):
         """切换模式"""
         self.agent_mode.set(is_agent)
@@ -254,11 +263,16 @@ class AISidebar:
     
     def send_message(self):
         """发送消息"""
+        if self._placeholder_active:
+            return
         message = self.chat_input.get("1.0", "end").strip()
         if not message or self.is_processing:
             return
         
         self.chat_input.delete("1.0", "end")
+        self.chat_input.insert("1.0", self._placeholder)
+        self.chat_input.config(fg="#999999")
+        self._placeholder_active = True
         self.add_message("user", message)
         
         self.is_processing = True

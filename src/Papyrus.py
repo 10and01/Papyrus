@@ -64,7 +64,8 @@ class PapyrusApp:
         except:
             pass  # 图标文件不存在时静默跳过
         
-        self.root.geometry("1180x680")  # 左侧主学习区 + 右侧AI侧栏
+        self.root.geometry("1000x680")  # 左侧主学习区 + 右侧AI侧栏
+        self.root.minsize(700, 500)
         
         self.cards = []
         self.current_card_index = -1
@@ -82,16 +83,17 @@ class PapyrusApp:
         self.content_area = tk.Frame(self.root)
         self.content_area.pack(side="top", fill="both", expand=True)
 
-        self.main_panel = tk.Frame(self.content_area)
-        self.main_panel.pack(side="left", fill="both", expand=True)
+        self.main_panel = tk.Frame(self.content_area, width=400)
+        self.main_panel.pack(side="left", fill="y")
+        self.main_panel.pack_propagate(False)
 
         # 1. 顶部状态栏
         self.status_var = tk.StringVar()
         tk.Label(self.main_panel, textvariable=self.status_var, fg="gray").pack(side="top", pady=5)
 
         # 2. 底部按钮容器 (固定高度80，防止按钮切换时界面跳动)
-        self.btn_frame = tk.Frame(self.main_panel, height=80)
-        self.btn_frame.pack(side="bottom", fill="x", pady=10, padx=20)
+        self.btn_frame = tk.Frame(self.main_panel, height=50)
+        self.btn_frame.pack(side="bottom", fill="x", pady=4, padx=16)
         self.btn_frame.pack_propagate(False) 
 
         # 定义两组按钮界面
@@ -114,7 +116,7 @@ class PapyrusApp:
 
         # 3. 中间卡片区 (带滚动条的文本)
         self.card_frame = tk.Frame(self.main_panel, relief="groove", bd=2)
-        self.card_frame.pack(side="top", fill="both", expand=True, padx=20, pady=5)
+        self.card_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
 
         scrollbar = tk.Scrollbar(self.card_frame)
         scrollbar.pack(side="right", fill="y")
