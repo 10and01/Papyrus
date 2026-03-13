@@ -1,6 +1,6 @@
 import json
-
 import os
+import re
 
 class AIConfig:
     """AI配置管理器"""
@@ -62,7 +62,45 @@ class AIConfig:
             self.config = default
             self.save_config()
     
+    def validate_config(self):
+        """验证配置是否包含非法字符"""
+        errors = []
+        
+        # 验证所有提供商的配置
+        for provider_name, provider_config in self.config["providers"].items():
+            # 验证 API Key（如果存在）
+            if "api_key" in provider_config:
+                api_key = provider_config["api_key"]
+                if api_key and not self._is_valid_ascii(api_key):
+                    errors.append(f"{provider_name.upper()} 的 API Key 中包含非法字符（如中文或特殊空格）")
+            
+            # 验证 Base URL
+            if "base_url" in provider_config:
+                base_url = provider_config["base_url"]
+                if base_url and not self._is_valid_url(base_url):
+                    errors.append(f"{provider_name.upper()} 的 Base URL 中包含非法字符")
+        
+        if errors:
+            raise ValueError("\n".join(errors))
+    
+    def _is_valid_ascii(self, text):
+        """检查文本是否只包含 ASCII 字符"""
+        try:
+            text.encode('ascii')
+            return True
+        except UnicodeEncodeError:
+            return False
+    
+    def _is_valid_url(self, url):
+        """检查 URL 是否有效（只包含 ASCII 字符）"""
+        if not url:
+            return True
+        # URL 应该只包含 ASCII 字符
+        return self._is_valid_ascii(url)
+    
     def save_config(self):
+        # 保存前验证配置
+        self.validate_config()
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(self.config, f, ensure_ascii=False, indent=2)
     

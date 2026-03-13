@@ -49,6 +49,8 @@ class OpenAIProvider(AIProvider):
             )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
+        except UnicodeEncodeError:
+            raise Exception("配置错误：API Key 或 Base URL 中包含非法字符（如中文或特殊空格），请检查 AI 设置")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API调用失败: {str(e)}")
     
@@ -87,6 +89,8 @@ class OllamaProvider(AIProvider):
             )
             response.raise_for_status()
             return response.json()["message"]["content"]
+        except UnicodeEncodeError:
+            raise Exception("配置错误：Base URL 中包含非法字符（如中文），请检查 AI 设置")
         except requests.exceptions.RequestException as e:
             raise Exception(f"Ollama调用失败: {str(e)}")
     

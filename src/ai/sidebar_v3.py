@@ -561,7 +561,7 @@ class SettingsWindow:
             self.config.config["current_model"] = available_models[0]
             messagebox.showinfo("提示", f"已自动切换到模型: {available_models[0]}")
         
-        # 保存配置到文件
+                # 保存配置到文件
         try:
             self.config.save_config()
             
@@ -570,5 +570,8 @@ class SettingsWindow:
             
             messagebox.showinfo("成功", "设置已保存")
             self.window.destroy()
+        except ValueError as e:
+            # 配置验证错误（如包含非法字符）
+            messagebox.showerror("配置错误", str(e))
         except Exception as e:
             messagebox.showerror("错误", f"保存设置失败: {str(e)}")
