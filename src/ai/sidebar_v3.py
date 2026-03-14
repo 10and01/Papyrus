@@ -176,9 +176,10 @@ class AISidebar:
                 bg="#f8f8f8", fg="#666666").pack(side="left", padx=(0, 6))
 
         self.model_var = tk.StringVar(value=current_model)
+        self.model_var.trace_add("write", self._on_model_var_changed)
         self.model_menu = tk.OptionMenu(model_row, self.model_var, *models, command=self.on_model_change)
         self.model_menu.config(bg="#ffffff", fg="#666666", font=("微软雅黑", 9),
-                              relief="flat", highlightthickness=0, padx=6, pady=1)
+        relief="flat", highlightthickness=0, padx=6, pady=1)
         self.model_menu.pack(side="left")
 
         input_border_container = tk.Frame(bottom_panel, bg="#f8f8f8")
@@ -190,15 +191,15 @@ class AISidebar:
         input_inner = tk.Frame(input_border, bg="#ffffff")
         input_inner.pack(fill="x", padx=1, pady=1)
         self.chat_input = tk.Text(input_inner,
-                                 height=1,
-                                 font=("微软雅黑", 10),
-                                 bg="#ffffff",
-                                 fg="#333333",
-                                 relief="flat",
-                                 bd=0,
-                                 padx=10,
-                                 pady=5,
-                                 wrap="none")
+            height=1,
+            font=("微软雅黑", 10),
+            bg="#ffffff",
+            fg="#333333",
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=5,
+            wrap="none")
         self.chat_input.pack(fill="both", expand=True)
         self.chat_input.bind("<Return>", self.on_enter)
         self.chat_input.bind("<Shift-Return>", lambda e: None)
@@ -212,12 +213,31 @@ class AISidebar:
         else:
             self.agent_btn.config(bg="#e0e0e0", fg="#666666")
             self.chat_btn.config(bg="#1976d2", fg="#ffffff")
-    
+
+    def _on_model_var_changed(self, *args):
+        """model_var 变化时自动同步顶部标签和配置"""
+        model = self.model_var.get()
+        if not model:
+            return
+        # 同步顶部状态栏标签
+        if hasattr(self, 'model_label'):
+            self.model_label.config(text=model)
+        # 同步配置（如果不一致）
+        cfg = self.ai_manager.config.config
+        if cfg.get("current_model") != model:
+            cfg["current_model"] = model
+            self.ai_manager.config.save_config()
+
     def on_model_change(self, model):
-        """切换模型"""
-        self.ai_manager.config.config["current_model"] = model
+        """切换模型 - 确保配置、顶部标签、下拉框三方同步"""
+        cfg = self.ai_manager.config.config
+        cfg["current_model"] = model
         self.ai_manager.config.save_config()
-        self.update_model_display()
+        # 直接同步顶部标签
+        self.model_label.config(text=model)
+        # 同步下拉框显示（trace 会再次触发 _on_model_var_changed，但有幂等保护）
+        if hasattr(self, 'model_var') and self.model_var.get() != model:
+            self.model_var.set(model)
     
     def on_enter(self, event):
         """回车发送"""
@@ -325,28 +345,33 @@ class AISidebar:
         SettingsWindow(self.parent, self.ai_manager.config, self.update_model_display)
 
     def update_model_display(self):
-        """更新模型显示（含下拉菜单刷新）"""
+        """更新模型显示（含下拉菜单刷新）—— 以 config 为唯一数据源，同步所有 UI"""
         cfg = self.ai_manager.config.config
-        provider = cfg.get("current_provider")
+        provider = cfg.get("current_provider", "")
         providers = cfg.get("providers", {})
-        models = list((providers.get(provider) or {}).get("models", []) or [])
+        provider_cfg = providers.get(provider) or {}
+        models = list(provider_cfg.get("models", []) or [])
 
         model = cfg.get("current_model", "")
+        # 当前模型不在该提供商的列表中时，自动回退到第一个
         if models and model not in models:
             model = models[0]
             cfg["current_model"] = model
             self.ai_manager.config.save_config()
 
+        # 1) 同步顶部状态栏标签
         self.model_label.config(text=model)
 
-        # 同步下拉框显示与选项
-        if hasattr(self, "model_var"):
-            self.model_var.set(model)
-        if hasattr(self, "model_menu") and models:
+        # 2) 同步下拉框选项列表
+        if hasattr(self, "model_menu"):
             menu = self.model_menu["menu"]
             menu.delete(0, "end")
-            for m in models:
+            for m in (models or [model]):
                 menu.add_command(label=m, command=tk._setit(self.model_var, m, self.on_model_change))
+
+        # 3) 同步下拉框当前显示值（放在最后，触发 trace 会再次写 label，幂等无害）
+        if hasattr(self, "model_var") and self.model_var.get() != model:
+            self.model_var.set(model)
 
 
 
