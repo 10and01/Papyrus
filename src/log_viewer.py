@@ -27,7 +27,8 @@ class LogViewer:
         log_types = [
             ("全部日志", "all"),
             ("错误日志", "error"),
-            ("活动日志", "activity")
+            ("活动日志", "activity"),
+            ("事件日志", "events"),
         ]
         
         for text, value in log_types:

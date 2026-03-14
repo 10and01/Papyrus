@@ -10,11 +10,12 @@ import json
 
 class AISidebar:
     """AI侧边栏"""
-    def __init__(self, parent, ai_manager, get_current_card_callback, card_tools=None):
+    def __init__(self, parent, ai_manager, get_current_card_callback, card_tools=None, logger=None):
         self.parent = parent
         self.ai_manager = ai_manager
         self.get_current_card = get_current_card_callback
         self.card_tools = card_tools
+        self.logger = logger
         self.is_processing = False
         self.agent_mode = tk.BooleanVar(value=True)  # Agent模式开关
         
@@ -120,11 +121,10 @@ class AISidebar:
         self.chat_display.tag_configure("system", 
                                        foreground="#999999",
                                        font=("微软雅黑", 9, "italic"))
+        
     
     def create_input_area(self):
         """创建输入区"""
-        self._placeholder = "Enter 发送 · Shift+Enter 换行"
-        self._placeholder_active = True
 
         bottom_panel = tk.Frame(self.sidebar, bg="#f8f8f8")
         bottom_panel.pack(side="bottom", fill="x")
@@ -189,38 +189,20 @@ class AISidebar:
 
         input_inner = tk.Frame(input_border, bg="#ffffff")
         input_inner.pack(fill="x", padx=1, pady=1)
-
         self.chat_input = tk.Text(input_inner,
                                  height=1,
                                  font=("微软雅黑", 10),
                                  bg="#ffffff",
-                                 fg="#999999",
+                                 fg="#333333",
                                  relief="flat",
                                  bd=0,
                                  padx=10,
                                  pady=5,
                                  wrap="none")
         self.chat_input.pack(fill="both", expand=True)
-        self.chat_input.insert("1.0", self._placeholder)
-        self.chat_input.bind("<FocusIn>", self._on_focus_in)
-        self.chat_input.bind("<FocusOut>", self._on_focus_out)
         self.chat_input.bind("<Return>", self.on_enter)
         self.chat_input.bind("<Shift-Return>", lambda e: None)
     
-    def _on_focus_in(self, event):
-        """输入框获得焦点时移除占位符"""
-        if self._placeholder_active:
-            self.chat_input.delete("1.0", "end")
-            self.chat_input.config(fg="#333333")
-            self._placeholder_active = False
-
-    def _on_focus_out(self, event):
-        """输入框失去焦点时恢复占位符"""
-        if not self.chat_input.get("1.0", "end").strip():
-            self.chat_input.insert("1.0", self._placeholder)
-            self.chat_input.config(fg="#999999")
-            self._placeholder_active = True
-
     def set_mode(self, is_agent):
         """切换模式"""
         self.agent_mode.set(is_agent)
@@ -260,55 +242,76 @@ class AISidebar:
         
         self.chat_display.see("end")
         self.chat_display.config(state="disabled")
-    
+
+    def _log_event(self, event_type, data=None, level="INFO"):
+        """记录日志事件（可选）"""
+        if self.logger and hasattr(self.logger, "log_event"):
+            self.logger.log_event(event_type, data, level=level)
+
     def send_message(self):
         """发送消息"""
-        if self._placeholder_active:
+        if getattr(self, '_placeholder_active', False):
             return
+
         message = self.chat_input.get("1.0", "end").strip()
         if not message or self.is_processing:
             return
-        
+
         self.chat_input.delete("1.0", "end")
-        self.chat_input.insert("1.0", self._placeholder)
-        self.chat_input.config(fg="#999999")
-        self._placeholder_active = True
         self.add_message("user", message)
-        
+
         self.is_processing = True
         self.status_label.config(text="● 思考中...", fg="#ff9800")
-        
+
         def process():
+            import time
+            start = time.time()
             try:
                 card = self.get_current_card()
                 system_prompt = "你是Papyrus学习助手，帮助用户学习和管理知识卡片。"
-                
+
                 if card:
                     system_prompt += f"\n\n当前卡片：\n题目：{card['q']}\n答案：{card['a']}"
-                
-                # 根据模式决定是否启用工具
-                if self.agent_mode.get() and self.card_tools:
+
+                agent_mode = self.agent_mode.get()
+                if agent_mode and self.card_tools:
                     system_prompt += f"\n\n{self.card_tools.get_tools_definition()}"
-                
+
+                self._log_event("ai.chat_start", {
+                    "message_len": len(message),
+                    "agent_mode": agent_mode,
+                    "has_card": card is not None,
+                })
+
                 response = self.ai_manager.chat(message, system_prompt=system_prompt)
+                elapsed = round(time.time() - start, 4)
+                self._log_event("ai.chat_ok", {
+                    "elapsed_s": elapsed,
+                    "response_len": len(response),
+                })
+
                 self.parent.after(0, lambda: self.add_message("assistant", response))
                 self.parent.after(0, lambda: self.status_label.config(text="● 就绪", fg="#28a745"))
-                
-                # 只在Agent模式下执行工具调用
-                if self.agent_mode.get() and self.card_tools:
+
+                if agent_mode and self.card_tools:
                     tool_call = self.card_tools.parse_tool_call(response)
                     if tool_call:
                         result = self.card_tools.execute_tool(tool_call["tool"], tool_call["params"])
-                        self.parent.after(0, lambda: self.add_message("system",
-                            f"执行: {json.dumps(result, ensure_ascii=False, indent=2)}"))
+                        self.parent.after(0, lambda r=result: self.add_message("system",
+                            f"执行: {json.dumps(r, ensure_ascii=False, indent=2)}"))
             except Exception as e:
+                elapsed = round(time.time() - start, 4)
+                self._log_event("ai.chat_error", {
+                    "elapsed_s": elapsed,
+                    "error": str(e),
+                }, level="ERROR")
                 self.parent.after(0, lambda: self.add_message("system", f"错误: {str(e)}"))
                 self.parent.after(0, lambda: self.status_label.config(text="● 错误", fg="#dc3545"))
             finally:
                 self.is_processing = False
-        
+
         threading.Thread(target=process, daemon=True).start()
-    
+
     def clear_chat(self):
         """清空对话"""
         if messagebox.askyesno("确认", "清空对话历史?"):
@@ -316,15 +319,35 @@ class AISidebar:
             self.chat_display.config(state="normal")
             self.chat_display.delete(1.0, "end")
             self.chat_display.config(state="disabled")
-    
+
     def open_settings(self):
         """打开设置"""
         SettingsWindow(self.parent, self.ai_manager.config, self.update_model_display)
-    
+
     def update_model_display(self):
-        """更新模型显示"""
-        model = self.ai_manager.config.config["current_model"]
+        """更新模型显示（含下拉菜单刷新）"""
+        cfg = self.ai_manager.config.config
+        provider = cfg.get("current_provider")
+        providers = cfg.get("providers", {})
+        models = list((providers.get(provider) or {}).get("models", []) or [])
+
+        model = cfg.get("current_model", "")
+        if models and model not in models:
+            model = models[0]
+            cfg["current_model"] = model
+            self.ai_manager.config.save_config()
+
         self.model_label.config(text=model)
+
+        # 同步下拉框显示与选项
+        if hasattr(self, "model_var"):
+            self.model_var.set(model)
+        if hasattr(self, "model_menu") and models:
+            menu = self.model_menu["menu"]
+            menu.delete(0, "end")
+            for m in models:
+                menu.add_command(label=m, command=tk._setit(self.model_var, m, self.on_model_change))
+
 
 
 class SettingsWindow:
@@ -560,9 +583,10 @@ class SettingsWindow:
         if current_model not in available_models:
             self.config.config["current_model"] = available_models[0]
             messagebox.showinfo("提示", f"已自动切换到模型: {available_models[0]}")
-        
-                # 保存配置到文件
+
+        # 保存配置到文件
         try:
+
             self.config.save_config()
             
             if self.callback:

@@ -47,6 +47,18 @@ except Exception as e:
     print(f"[ERROR] 导入失败(Exception): {e}")
     traceback.print_exc()
 
+# 导入MCP模块（安全隔离）
+MCP_AVAILABLE = False
+try:
+    from mcp.server import MCPServer
+
+    MCP_AVAILABLE = True
+    print("[DEBUG] MCPServer导入成功")
+except ImportError as e:
+    print(f"[WARNING] MCP模块导入失败: {e}")
+except Exception as e:
+    print(f"[WARNING] MCP模块导入异常: {e}")
+
 # 获取项目根目录
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -92,11 +104,14 @@ class PapyrusApp:
 
         # 初始化日志系统
         self.logger = None
+        self.mcp_server = None
         self.setup_logger()
+
 
         self.load_data()
         self.setup_ui()  # 先初始化主界面容器
         self.setup_ai()  # 再初始化AI侧边栏
+        self.setup_mcp()  # 启动MCP本地服务器
         self.next_card()
 
     # -------------------------
@@ -244,15 +259,19 @@ class PapyrusApp:
                 self.ai_config = AIConfig(DATA_DIR)
                 print("[DEBUG] AIConfig初始化成功")
                 self.ai_manager = AIManager(self.ai_config)
+
                 print("[DEBUG] AIManager初始化成功")
                 self.card_tools = CardTools(self)
                 print("[DEBUG] CardTools初始化成功")
+
                 self.ai_sidebar = AISidebar(
                     self.content_area,
                     self.ai_manager,
                     self.get_current_card_context,
                     self.card_tools,
+                    logger=self.logger,
                 )
+
                 print("[OK] AI功能已启用")
             except Exception as e:
                 print(f"[ERROR] AI初始化失败: {e}")
@@ -263,6 +282,40 @@ class PapyrusApp:
             print("[INFO] AI_AVAILABLE=False, 显示占位面板")
             self.ai_sidebar = None
             self.show_ai_placeholder()
+
+    # -------------------------
+    # MCP
+    # -------------------------
+    def setup_mcp(self):
+        """启动 MCP 本地服务器（后台线程）"""
+        if not MCP_AVAILABLE:
+            print("[INFO] MCP_AVAILABLE=False, 跳过MCP服务器")
+            return
+
+        try:
+            card_tools = getattr(self, "card_tools", None)
+            self.mcp_server = MCPServer(
+                host="127.0.0.1",
+                port=9100,
+                logger=self.logger,
+                card_tools=card_tools,
+            )
+            self.mcp_server.start()
+            print("[OK] MCP服务器已启动: http://127.0.0.1:9100")
+        except Exception as e:
+            print(f"[ERROR] MCP服务器启动失败: {e}")
+            if self.logger:
+                self.logger.error(f"MCP服务器启动失败: {e}")
+            self.mcp_server = None
+
+    def stop_mcp(self):
+        """停止 MCP 服务器"""
+        if self.mcp_server:
+            try:
+                self.mcp_server.stop()
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(f"MCP服务器停止失败: {e}")
 
     def show_ai_placeholder(self):
         """显示AI功能占位提示"""
@@ -694,6 +747,11 @@ if __name__ == "__main__":
         root = tk.Tk()
         app = PapyrusApp(root)
         root.mainloop()
+
+        # 停止MCP服务器
+        if hasattr(app, "mcp_server") and app.mcp_server:
+            app.stop_mcp()
+
 
         # 程序正常退出时记录日志
         if hasattr(app, "logger") and app.logger:
